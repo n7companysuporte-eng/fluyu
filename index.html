@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Fluy • Controle Financeiro</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+@keyframes float {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
+}
+.logo-float { animation: float 3s ease-in-out infinite; }
+</style>
+</head>
+
+<body class="bg-gradient-to-br from-green-600 to-yellow-400 min-h-screen flex justify-center">
+
+<div class="w-full max-w-md p-4 text-white">
+
+<!-- LOGIN -->
+<div id="loginScreen" class="bg-white text-black rounded-2xl p-6 shadow-xl mt-24">
+  <h2 class="text-xl font-bold mb-4 text-center">Fluy</h2>
+
+  <input id="loginUser" placeholder="Usuário" class="w-full border rounded-xl p-3 mb-3">
+  <input id="loginPass" type="password" placeholder="Senha" class="w-full border rounded-xl p-3 mb-3">
+
+  <button onclick="handleLogin()" class="w-full bg-green-600 text-white py-3 rounded-xl">
+    Entrar
+  </button>
+
+  <p class="text-center mt-3 text-sm cursor-pointer text-green-600"
+     onclick="handleRegister()">
+     Criar conta
+  </p>
+</div>
+
+<!-- APP -->
+<div id="appScreen" class="hidden">
+
+<!-- HEADER -->
+<div class="flex flex-col items-center mb-4 relative">
+  <button onclick="logout()" class="absolute right-0 top-0 text-sm bg-white/20 px-3 py-1 rounded-lg">
+    Sair
+  </button>
+
+  <div class="logo-float bg-white rounded-full w-16 h-16 flex items-center justify-center shadow-xl mb-2">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none">
+      <path d="M3 14c4-6 10-6 18-2" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M3 18c4-4 10-4 18 0" stroke="#facc15" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+  </div>
+
+  <h1 class="text-2xl font-bold">Fluy</h1>
+  <p class="text-xs opacity-90">Seu dinheiro em movimento</p>
+
+  <select id="monthSelect" class="mt-3 text-black rounded-xl p-2 w-full">
+  </select>
+</div>
+
+<!-- SALDO -->
+<div class="bg-white text-black rounded-2xl p-5 shadow-xl mb-4">
+  <p class="text-sm text-gray-500">Saldo disponível no mês</p>
+  <h2 id="balance" class="text-3xl font-bold text-green-600">R$ 0,00</h2>
+
+  <div class="flex gap-3 mt-4">
+    <button onclick="openModal('income')" class="flex-1 bg-green-600 py-4 rounded-xl text-lg">
+      + Receita
+    </button>
+    <button onclick="openModal('expense')" class="flex-1 bg-red-500 py-4 rounded-xl text-lg">
+      - Gasto
+    </button>
+  </div>
+</div>
+
+<!-- LIMITE -->
+<div class="bg-white text-black rounded-2xl p-4 shadow mb-4">
+  <p class="font-semibold mb-2">Limite de gastos</p>
+
+  <input id="limitInput" type="number"
+    placeholder="Definir limite mensal"
+    class="w-full border rounded-xl p-3 mb-3">
+
+  <button onclick="saveLimit()"
+    class="w-full bg-green-600 text-white py-3 rounded-xl">
+    Salvar limite
+  </button>
+
+  <div class="mt-4">
+    <div class="flex justify-between text-sm mb-1">
+      <span>Uso do limite</span>
+      <span id="limitPercent">0%</span>
+    </div>
+
+    <div class="w-full bg-gray-200 rounded-full h-4">
+      <div id="limitBar" class="h-4 rounded-full bg-green-500"></div>
+    </div>
+
+    <p id="limitStatus" class="text-center font-semibold mt-2"></p>
+  </div>
+</div>
+
+<!-- GASTOS POR CATEGORIA -->
+<div class="bg-white text-black rounded-2xl p-4 shadow">
+  <p class="font-semibold mb-2">Gastos por categoria</p>
+  <ul id="categorySummary" class="space-y-2 text-sm"></ul>
+</div>
+
+</div>
+</div>
+
+<!-- MODAL -->
+<div id="modal" class="fixed inset-0 bg-black/40 hidden items-end">
+  <div class="bg-white w-full rounded-t-3xl p-5 text-black">
+    <p id="modalTitle" class="font-bold mb-3"></p>
+
+    <input id="valueInput" type="number"
+      placeholder="Valor"
+      class="w-full border rounded-xl p-3 mb-3">
+
+    <div id="categoryButtons" class="grid grid-cols-2 gap-2 mb-4"></div>
+
+    <button onclick="confirmAdd()"
+      class="w-full bg-green-600 text-white py-3 rounded-xl">
+      Confirmar
+    </button>
+
+    <button onclick="closeModal()"
+      class="w-full mt-2 text-gray-500">
+      Cancelar
+    </button>
+  </div>
+</div>
+
+<script>
+let currentUser = null;
+let userData = null;
+let currentType = "";
+let selectedCategory = "";
+let monthlyLimit = 0;
+
+const incomeCategories = ["Salário","Renda Extra","Freelas","Investimentos","Outros"];
+const expenseCategories = ["Moradia","Alimentação","Transporte","Lazer","Saúde","Educação","Compras","Outros"];
+
+/* LOGIN */
+function handleLogin(){
+  const u = document.getElementById("loginUser").value.trim();
+  const p = document.getElementById("loginPass").value.trim();
+  if(!u || !p) return alert("Preencha usuário e senha");
+
+  const users = JSON.parse(localStorage.getItem("fluy_users") || "{}");
+
+  if(!users[u]) return alert("Usuário não existe. Crie a conta.");
+
+  if(users[u].pass !== p) return alert("Senha incorreta");
+
+  localStorage.setItem("fluy_session", u);
+  location.reload();
+}
+
+function handleRegister(){
+  const u = document.getElementById("loginUser").value.trim();
+  const p = document.getElementById("loginPass").value.trim();
+  if(!u || !p) return alert("Informe usuário e senha");
+
+  const users = JSON.parse(localStorage.getItem("fluy_users") || "{}");
+
+  if(users[u]) return alert("Usuário já existe");
+
+  users[u] = { pass:p, items:[], limit:0 };
+  localStorage.setItem("fluy_users", JSON.stringify(users));
+  alert("Conta criada com sucesso");
+}
+
+/* LOGOUT */
+function logout(){
+  localStorage.removeItem("fluy_session");
+  location.reload();
+}
+
+/* INIT */
+(function init(){
+  currentUser = localStorage.getItem("fluy_session");
+  if(!currentUser) return;
+
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("appScreen").classList.remove("hidden");
+
+  const users = JSON.parse(localStorage.getItem("fluy_users"));
+  userData = users[currentUser];
+
+  const monthSelect = document.getElementById("monthSelect");
+  for(let i=0;i<12;i++){
+    const d = new Date(2025,i);
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.text = d.toLocaleString("pt-BR",{month:"long"});
+    monthSelect.appendChild(opt);
+  }
+
+  monthlyLimit = userData.limit || 0;
+  document.getElementById("limitInput").value = monthlyLimit || "";
+
+  monthSelect.onchange = render;
+  render();
+})();
+
+/* APP */
+function openModal(type){
+  currentType = type;
+  selectedCategory = "";
+  document.getElementById("modalTitle").innerText =
+    type === "income" ? "Adicionar Receita" : "Adicionar Gasto";
+
+  const area = document.getElementById("categoryButtons");
+  area.innerHTML = "";
+
+  (type==="income"?incomeCategories:expenseCategories).forEach(c=>{
+    const b = document.createElement("button");
+    b.innerText = c;
+    b.className = "border rounded-xl py-2";
+    b.onclick = ()=>{
+      selectedCategory = c;
+      [...area.children].forEach(x=>x.classList.remove("bg-green-200"));
+      b.classList.add("bg-green-200");
+    };
+    area.appendChild(b);
+  });
+
+  document.getElementById("modal").classList.remove("hidden");
+}
+
+function closeModal(){
+  document.getElementById("modal").classList.add("hidden");
+}
+
+function confirmAdd(){
+  const v = Number(document.getElementById("valueInput").value);
+  if(!v || !selectedCategory) return;
+
+  userData.items.push({
+    type:currentType,
+    category:selectedCategory,
+    value:v,
+    month:document.getElementById("monthSelect").value
+  });
+
+  document.getElementById("valueInput").value="";
+  closeModal();
+  save();
+  render();
+}
+
+function saveLimit(){
+  monthlyLimit = Number(document.getElementById("limitInput").value);
+  userData.limit = monthlyLimit;
+  save();
+  render();
+}
+
+function render(){
+  let balance = 0;
+  let spent = 0;
+  const summary = {};
+
+  userData.items
+    .filter(i=>i.month===document.getElementById("monthSelect").value)
+    .forEach(i=>{
+      if(i.type==="income") balance += i.value;
+      else{
+        balance -= i.value;
+        spent += i.value;
+        summary[i.category]=(summary[i.category]||0)+i.value;
+      }
+    });
+
+  document.getElementById("balance").innerText = "R$ "+balance.toFixed(2);
+
+  const ul = document.getElementById("categorySummary");
+  ul.innerHTML="";
+  Object.keys(summary).forEach(c=>{
+    ul.innerHTML+=`
+      <li class="flex justify-between bg-gray-100 p-2 rounded-lg">
+        <span>${c}</span>
+        <strong>R$ ${summary[c].toFixed(2)}</strong>
+      </li>`;
+  });
+
+  if(monthlyLimit){
+    const p = Math.min((spent/monthlyLimit)*100,100);
+    document.getElementById("limitPercent").innerText = p.toFixed(0)+"%";
+    document.getElementById("limitBar").style.width = p+"%";
+    document.getElementById("limitStatus").innerText =
+      p<60?"🟢 Controle":"🟡 Atenção";
+  }
+}
+
+function save(){
+  const users = JSON.parse(localStorage.getItem("fluy_users"));
+  users[currentUser] = userData;
+  localStorage.setItem("fluy_users", JSON.stringify(users));
+}
+</script>
+
+</body>
+</html>
